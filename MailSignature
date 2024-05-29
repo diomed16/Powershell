@@ -18,10 +18,10 @@ foreach ($component in $domainComponents) {
     $searchRoot += "DC=$component,"
 }
 $searchRoot = $searchRoot.TrimEnd(',')
-catch
-{
-exit 1
+$searchRoot
 }
+catch
+{ exit 1}
 try{
 $LDAPSEARCH = New-Object System.DirectoryServices.DirectorySearcher 
 $LDAPSEARCH.SearchRoot = $searchRoot
@@ -73,6 +73,7 @@ foreach ($Ext in $FileExtension)
 
 foreach ($Ext in $FileExtension)
 {
+
 (Get-Content "$PathSignatureUser\$FileName.$Ext") | Foreach-Object {
 $_`
 -replace "@NAME", $AD_user.Description `
@@ -82,8 +83,10 @@ $_`
 -replace "@PHONE", $AD_user.telephoneNumber `
 -replace "@MOBILE", $AD_user.mobile `
 -replace "@EMAIL", $AD_user.Mail `
-} | Set-Content "$PathSignatureUser\$FileName.$Ext" -Encoding UTF8
+} | Set-Content "$PathSignatureUser\$FileName.$Ext"
 }
+
+
 
 foreach ($Ext in $FileExtension)
 {
