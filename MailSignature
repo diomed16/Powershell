@@ -1,0 +1,106 @@
+﻿<#
+.SYNOPSIS
+	Sets managedby computer attribute
+.DESCRIPTION
+	This PowerShell script sets a signature for Outlook
+.LINK
+	https://github.com/diomed16/PowerShell
+.NOTES
+	Author: Konstantin Shumakov
+#>
+$User = $env:UserName
+try{
+$domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+$domainName = $domain.Name
+$domainComponents = $domainName.Split('.')
+$searchRoot = "LDAP://"
+foreach ($component in $domainComponents) {
+    $searchRoot += "DC=$component,"
+}
+$searchRoot = $searchRoot.TrimEnd(',')
+catch
+{
+exit 1
+}
+try{
+$LDAPSEARCH = New-Object System.DirectoryServices.DirectorySearcher 
+$LDAPSEARCH.SearchRoot = $searchRoot
+
+$LDAPSEARCH.Filter = "(&(objectClass=user)(sAMAccountName=$User))"
+$LDAPSEARCH_RESULTS = $LDAPSEARCH.FindAll()
+$AD_user = foreach ($LINE in $LDAPSEARCH_RESULTS) {
+$LINE_ENTRY = $LINE.GetDirectoryEntry()
+$LINE_ENTRY | Select-Object @{ Name = "sAMAccountName";  Expression = { $_.sAMAccountName }},
+@{ Name = "userPrincipalName";  Expression = { $_.userPrincipalName }},
+@{ Name = "name";  Expression = { $_.name }},
+@{ Name = "mail";  Expression = { $_.Mail }},
+@{ Name = "department";  Expression = { $_.department }},
+@{ Name = "mobile";  Expression = { $_.mobile }},
+@{ Name = "telephoneNumber";  Expression = { $_.telephoneNumber }},
+@{ Name = "Company";  Expression = { $_.Company }},
+@{ Name = "title";  Expression = { $_.title }},
+@{ Name = "Description";  Expression = { $_.Description }},
+@{ Name = "distinguishedName"; Expression = { $_.distinguishedName | Select-Object -First 1 }}
+}
+}
+catch
+{
+exit 1
+}
+$AD_user.title
+
+
+$FileName = "signature"
+$FileExtension = "htm","rtf","txt","gif","jpg","png"
+$Path = "C:\Users\Public\Downloads"
+$PathSignature = "$Path"
+$PathSignatureTemplates = "$Path\Templates"
+$PathSignatureUser = "$PathSignature\$User"
+$AppSignatures =$env:APPDATA + "\Microsoft\Signatures"
+
+
+
+If(!(test-path $AppSignatures))
+{
+	New-Item -ItemType Directory -Force -Path $AppSignatures
+}
+
+New-Item -Path "$PathSignature\$User" -ItemType Container -Force
+foreach ($Ext in $FileExtension)
+{
+	Copy-Item -Force "$PathSignatureTemplates\$FileName.$Ext" "$PathSignatureUser\$FileName.$Ext" -ErrorAction SilentlyContinue
+}
+
+foreach ($Ext in $FileExtension)
+{
+(Get-Content "$PathSignatureUser\$FileName.$Ext") | Foreach-Object {
+$_`
+-replace "@NAME", $AD_user.Description `
+-replace "@TITLE", $AD_user.title `
+-replace "@DEPARTMENT", $AD_user.department `
+-replace "@COMPANY", $AD_user.Company `
+-replace "@PHONE", $AD_user.telephoneNumber `
+-replace "@MOBILE", $AD_user.mobile `
+-replace "@EMAIL", $AD_user.Mail `
+} | Set-Content "$PathSignatureUser\$FileName.$Ext" -Encoding UTF8
+}
+
+foreach ($Ext in $FileExtension)
+{
+Copy-Item -Force "$PathSignatureUser\$FileName.$Ext" "$AppSignatures\$User.$Ext" 
+write-host "$PathSignatureUser\$FileName.$Ext" 
+write-host "$AppSignatures\$User.$Ext" 
+}
+Copy-Item -Force "$PathSignatureTemplates\signature.png" "$AppSignatures\signature.png" 
+
+If (Test-Path HKCU:'\Software\Microsoft\Office\15.0') {
+Remove-ItemProperty -Path HKCU:\Software\Microsoft\Office\15.0\Outlook\Setup -Name First-Run -Force -ErrorAction SilentlyContinue -Verbose
+New-ItemProperty HKCU:'\Software\Microsoft\Office\15.0\Common\MailSettings' -Name 'ReplySignature' -Value $User -PropertyType 'String' -Force -ErrorAction SilentlyContinue
+New-ItemProperty HKCU:'\Software\Microsoft\Office\15.0\Common\MailSettings' -Name 'NewSignature' -Value $User -PropertyType 'String' -Force -ErrorAction SilentlyContinue
+}
+
+If (Test-Path HKCU:'\Software\Microsoft\Office\16.0') {
+Remove-ItemProperty -Path HKCU:\Software\Microsoft\Office\16.0\Outlook\Setup -Name First-Run -Force -ErrorAction SilentlyContinue -Verbose
+New-ItemProperty HKCU:'\Software\Microsoft\Office\16.0\Common\MailSettings' -Name 'ReplySignature' -Value $User -PropertyType 'String' -Force -ErrorAction SilentlyContinue
+New-ItemProperty HKCU:'\Software\Microsoft\Office\16.0\Common\MailSettings' -Name 'NewSignature' -Value $User -PropertyType 'String' -Force -ErrorAction SilentlyContinue
+}
